@@ -19,6 +19,10 @@ const CRC_HIL_SENSOR: u8 = 108;
 const CRC_HIL_GPS: u8 = 124;
 const CRC_HIL_STATE_QUATERNION: u8 = 4;
 
+pub const MAV_TYPE_ONBOARD_CONTROLLER: u8 = 2;
+pub const MAV_AUTOPILOT_INVALID: u8 = 8;
+pub const MAV_STATE_ACTIVE: u8 = 4;
+
 fn crc_accumulate(byte: u8, crc: &mut u16) {
     let tmp = byte ^ (*crc & 0xff) as u8;
     let tmp = tmp ^ (tmp << 4);
@@ -85,13 +89,20 @@ fn u16sat(x: f64) -> u16 {
     x.clamp(0.0, u16::MAX as f64) as u16
 }
 
-pub fn encode_heartbeat(seq: u8, sysid: u8, compid: u8) -> Vec<u8> {
+pub fn encode_heartbeat(
+    seq: u8,
+    sysid: u8,
+    compid: u8,
+    mav_type: u8,
+    autopilot: u8,
+    system_status: u8,
+) -> Vec<u8> {
     let mut p = Vec::with_capacity(9);
     push_u32(&mut p, 0);
+    push_u8(&mut p, mav_type);
+    push_u8(&mut p, autopilot);
     push_u8(&mut p, 0);
-    push_u8(&mut p, 0);
-    push_u8(&mut p, 0);
-    push_u8(&mut p, 0);
+    push_u8(&mut p, system_status);
     push_u8(&mut p, 3);
     pack_v2(MSG_HEARTBEAT, &p, CRC_HEARTBEAT, seq, sysid, compid)
 }
@@ -361,7 +372,14 @@ impl<T: Transport> SitlLink<T> {
 
     pub fn send_heartbeat(&mut self) -> io::Result<()> {
         let s = self.next_seq();
-        let msg = encode_heartbeat(s, self.sysid, self.compid);
+        let msg = encode_heartbeat(
+            s,
+            self.sysid,
+            self.compid,
+            MAV_TYPE_ONBOARD_CONTROLLER,
+            MAV_AUTOPILOT_INVALID,
+            MAV_STATE_ACTIVE,
+        );
         self.transport.send(&msg)
     }
 
@@ -485,6 +503,7 @@ mod tests {
         let reply = actuator_frame([0.5, 0.25, 0.125, 0.75]);
         let mut link = SitlLink::new(MockPx4 { sent: Vec::new(), inbox: reply });
 
+        link.send_heartbeat().unwrap();
         link.send_sensors(&f, &st, &origin).unwrap();
         assert!(link.poll_actuators().unwrap());
         let motors = link.take_motors().unwrap();
@@ -493,6 +512,7 @@ mod tests {
         // The simulator emitted parseable frames in the documented order.
         let mut p = MavParser::new();
         p.push(&link.transport.sent);
+        assert_eq!(p.next_message().unwrap().0, MSG_HEARTBEAT);
         assert_eq!(p.next_message().unwrap().0, MSG_HIL_SENSOR);
         assert_eq!(p.next_message().unwrap().0, MSG_HIL_GPS);
         assert_eq!(p.next_message().unwrap().0, MSG_HIL_STATE_QUATERNION);

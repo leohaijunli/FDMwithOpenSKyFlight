@@ -22,8 +22,15 @@ fn main() {
     let dt = 0.004;
     println!("PX4 SITL simulator listening on tcp 0.0.0.0:4560, waiting for PX4...");
 
+    let mut last_hb = -1.0;
     loop {
         let s = fdm.snapshot();
+        if s.time - last_hb >= 1.0 {
+            if let Err(e) = link.send_heartbeat() {
+                eprintln!("heartbeat send error: {e}");
+            }
+            last_hb = s.time;
+        }
         let frame = sensors.sample(dt, &s);
         if let Err(e) = link.send_sensors(&frame, &s, &origin) {
             eprintln!("send error: {e}");
