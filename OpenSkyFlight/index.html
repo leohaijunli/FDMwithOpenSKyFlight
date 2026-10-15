@@ -116,6 +116,16 @@
         </select>
       </div>
 
+      <div class="ctrl-group">
+        <button id="uploadModel">LOAD MODEL (GLTF/OBJ/STL/FBX)</button>
+        <input type="file" id="modelFile" accept=".gltf,.glb,.obj,.stl,.fbx" hidden />
+      </div>
+
+      <div class="ctrl-group column">
+        <textarea id="fdmParams" rows="3" placeholder='{"mass":1.4,"motor":{"kv":960}}'></textarea>
+        <button id="applyFdmParams">APPLY FDM PARAMS</button>
+      </div>
+
       <!-- ── CONFIGURATION ── -->
       <div class="mfd-section-label">CONFIGURATION</div>
 

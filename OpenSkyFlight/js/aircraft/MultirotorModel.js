@@ -31,30 +31,41 @@ export default class MultirotorModel {
 
   async load(url) {
     const gltf = await new GLTFLoader().loadAsync(url);
-    const mesh = gltf.scene;
+    this.loadMesh(gltf.scene, { detectProps: true });
+  }
 
-    // Rotor order is [front-right, aft-left, front-left, aft-right] to match the FDM.
-    const byName = {};
-    mesh.traverse((o) => {
-      if (o.name) byName[o.name] = o;
-    });
-    this._props = [
-      ['PropCounterClockwiseFront_low', 1],
-      ['PropCounterClockwiseBack_low', 1],
-      ['PropClockwiseFront_low', -1],
-      ['PropClockwiseBack_low', -1],
-    ]
-      .map(([name, dir]) => {
-        const node = byName[name];
-        return node ? { node, dir, angle: 0, base: node.quaternion.clone() } : null;
-      })
-      .filter(Boolean);
+  /** Build the scene group from an arbitrary Object3D (GLTF/OBJ/STL/FBX). */
+  loadMesh(mesh, { detectProps = false } = {}) {
+    if (this.group) {
+      this.scene.remove(this.group);
+      this.group = null;
+    }
+    this.ready = false;
+    this._props = [];
+
+    if (detectProps) {
+      const byName = {};
+      mesh.traverse((o) => {
+        if (o.name) byName[o.name] = o;
+      });
+      this._props = [
+        ['PropCounterClockwiseFront_low', 1],
+        ['PropCounterClockwiseBack_low', 1],
+        ['PropClockwiseFront_low', -1],
+        ['PropClockwiseBack_low', -1],
+      ]
+        .map(([name, dir]) => {
+          const node = byName[name];
+          return node ? { node, dir, angle: 0, base: node.quaternion.clone() } : null;
+        })
+        .filter(Boolean);
+    }
 
     const box = new THREE.Box3().setFromObject(mesh);
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
-    const scale = TARGET_LENGTH / maxDim;
+    const scale = maxDim > 0 ? TARGET_LENGTH / maxDim : 1;
 
     const center = new THREE.Vector3();
     box.getCenter(center);
@@ -74,7 +85,7 @@ export default class MultirotorModel {
 
     this.scene.add(this.group);
     this.ready = true;
-    Logger.info('Aircraft', `Quad loaded — scaled ${scale.toFixed(3)}x (${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)} → ${TARGET_LENGTH}m)`);
+    Logger.info('Aircraft', `Model loaded — scaled ${scale.toFixed(3)}x (${size.x.toFixed(1)}×${size.y.toFixed(1)}×${size.z.toFixed(1)} → ${TARGET_LENGTH}m)`);
   }
 
   update(state, dt = 0) {

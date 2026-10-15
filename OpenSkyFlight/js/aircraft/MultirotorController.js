@@ -5,28 +5,29 @@ import Px4Link from '../fdm/Px4Link.js';
 import StickInput from '../input/StickInput.js';
 
 /** Physics rate of the Rust FDM core (Hz). */
-const PHYS_HZ = 250;
+const _ctrl = CONFIG.control ?? {};
+const PHYS_HZ = _ctrl.physHz ?? 250;
 const DT = 1 / PHYS_HZ;
-const MAX_SUBSTEPS = 25;
+const MAX_SUBSTEPS = _ctrl.maxSubsteps ?? 25;
 
 /** Throttle stick that holds the F450 in a hover (found empirically). */
-const HOVER_THROTTLE = 0.405;
+const HOVER_THROTTLE = _ctrl.hoverThrottle ?? 0.405;
 
 /** Vertical-velocity hold gains (feed-forward + PI). */
-const VZ_KP = 0.06;
-const VZ_KI = 0.02;
-const THR_INT_MAX = 0.25;
+const VZ_KP = _ctrl.vzKp ?? 0.06;
+const VZ_KI = _ctrl.vzKi ?? 0.02;
+const THR_INT_MAX = _ctrl.thrIntMax ?? 0.25;
 
 /** Max body rate the Rust rate stabilizer is fed (rad/s); must match `stabilizer.rs`. */
-const MAX_RATE_PQ = 4.0;
+const MAX_RATE_PQ = _ctrl.maxRatePq ?? 4.0;
 /** Attitude-loop gain: tilt error (rad) -> commanded body rate (rad/s). */
-const ATT_KP = 2.5;
+const ATT_KP = _ctrl.attKp ?? 2.5;
 /** Horizontal velocity loop: speed error (m/s) -> tilt (rad) + integral. */
-const VEL_KP = 0.05;
-const VEL_KI = 0.08;
-const VEL_INT_MAX = 1.5;
+const VEL_KP = _ctrl.velKp ?? 0.05;
+const VEL_KI = _ctrl.velKi ?? 0.08;
+const VEL_INT_MAX = _ctrl.velIntMax ?? 1.5;
 /** Maximum commanded tilt (rad) for the velocity loop. */
-const MAX_TILT = 0.5;
+const MAX_TILT = _ctrl.maxTilt ?? 0.5;
 
 /**
  * Local NED -> three.js scene frame change (x=east, y=up, z=-north).

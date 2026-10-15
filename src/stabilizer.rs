@@ -1,6 +1,7 @@
 use crate::controller::{Controller, FdmState, PilotInput};
 use crate::math::*;
 use crate::propulsion::mix;
+use std::any::Any;
 
 /// Built-in rate-mode stabilizer: pilot stick -> desired body rates -> PI -> motor mixer.
 pub struct Stabilizer {
@@ -20,6 +21,18 @@ impl Stabilizer {
             kp: 0.09,
             ki: 0.05,
             limit: 0.3,
+            int: [0.0; 3],
+        }
+    }
+
+    /// Build from `[max_rate_pq, max_rate_r, kp, ki, limit]`.
+    pub fn from_cfg(c: [f64; 5]) -> Self {
+        Stabilizer {
+            max_rate_pq: c[0],
+            max_rate_r: c[1],
+            kp: c[2],
+            ki: c[3],
+            limit: c[4],
             int: [0.0; 3],
         }
     }
@@ -53,5 +66,8 @@ impl Controller for Stabilizer {
     fn update(&mut self, dt: f64, state: &FdmState, pilot: &PilotInput) -> [f64; 4] {
         let (thr, rates) = self.rates(pilot);
         self.mix_rates(dt, thr, rates, state.omega)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

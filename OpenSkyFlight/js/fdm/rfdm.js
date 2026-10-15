@@ -89,6 +89,21 @@ export default class Rfdm {
     this._e.rfdm_step_motors(this._sim, dt, motors[0], motors[1], motors[2], motors[3]);
   }
 
+  /**
+   * Reconfigure the plant (mass, inertia, motors, props, rotors, aero, ground,
+   * initial state, stabilizer gains) from a plain object and reset the sim.
+   * Any omitted field keeps its current value.
+   */
+  setConfig(config) {
+    const json = JSON.stringify(config);
+    const enc = new TextEncoder().encode(json);
+    const ptr = this._e.rfdm_alloc(enc.length);
+    new Uint8Array(this._e.memory.buffer, ptr, enc.length).set(enc);
+    const ret = this._e.rfdm_set_config(this._sim, ptr, enc.length);
+    this._e.rfdm_free_bytes(ptr, enc.length);
+    if (ret !== 0) throw new Error(`rfdm_set_config failed (${ret})`);
+  }
+
   /** Refresh and return the cached state array (see layout above). */
   readState() {
     this._e.rfdm_write_state(this._sim, this._scratch);

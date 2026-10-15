@@ -5,6 +5,7 @@ pub mod config;
 pub mod controller;
 pub mod fdm;
 pub mod ground;
+pub mod json;
 pub mod math;
 pub mod propulsion;
 pub mod px4;

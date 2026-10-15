@@ -1,4 +1,5 @@
 use crate::math::*;
+use std::any::Any;
 
 /// Read-only snapshot of the plant, handed to a [`Controller`] each step.
 #[derive(Clone, Copy)]
@@ -45,9 +46,10 @@ impl Default for PilotInput {
 /// - Called once per `dt` by [`crate::sim::Sim`], with the plant state *before* the step.
 /// - Returns 4 motor throttle commands in [0, 1], in rotor order
 ///   [front-right, aft-left, front-left, aft-right].
-pub trait Controller {
+pub trait Controller: Any {
     fn reset(&mut self);
     fn update(&mut self, dt: f64, state: &FdmState, pilot: &PilotInput) -> [f64; 4];
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 pub fn build_fdm_state(

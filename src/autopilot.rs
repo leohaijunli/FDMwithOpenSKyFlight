@@ -1,6 +1,7 @@
 use crate::controller::{Controller, FdmState, PilotInput};
 use crate::math::*;
 use crate::stabilizer::Stabilizer;
+use std::any::Any;
 
 /// Demo outer-loop: hold altitude + heading, level attitude. Uses the built-in stabilizer.
 pub struct Autopilot {
@@ -58,5 +59,8 @@ impl Controller for Autopilot {
         let thr = (self.hover + self.kp_climb * (climb_ref - vup)).clamp(0.0, 1.0);
 
         self.stab.mix_rates(dt, thr, [p_des, q_des, r_des], s.omega)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }

@@ -24,6 +24,10 @@ import BenchmarkRunner from './benchmark/BenchmarkRunner.js';
 import BenchmarkComparator from './benchmark/BenchmarkComparator.js';
 import GPUTimer from './benchmark/GPUTimer.js';
 import MultirotorModel from './aircraft/MultirotorModel.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import ChaseCameraController from './camera/ChaseCameraController.js';
 import FlightPlanRecorder from './flightplan/FlightPlanRecorder.js';
 import Stats from 'stats.js';
@@ -46,6 +50,7 @@ async function initApp() {
 
   // --- Controllers ---
   const rfdm = await Rfdm.load();
+  rfdm.setConfig(CONFIG.fdm);
   const flightController = new MultirotorController(camera, renderer.domElement, rfdm);
   const stickPad = document.getElementById('stick-pad');
   const stickKnob = document.getElementById('stick-knob');
@@ -59,6 +64,58 @@ async function initApp() {
   const aircraftManager = new MultirotorModel(scene);
   aircraftManager.load('assets/models/quad/CesiumDrone.glb').catch((err) => {
     Logger.warn('App', 'Failed to load quad model: ' + err.message);
+  });
+
+  // --- Model upload (GLTF / GLB / OBJ / STL / FBX) ---
+  const modelFile = document.getElementById('modelFile');
+  document.getElementById('uploadModel').addEventListener('click', () => modelFile.click());
+  modelFile.addEventListener('change', async () => {
+    const file = modelFile.files[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    let mesh;
+    try {
+      if (ext === 'gltf' || ext === 'glb') {
+        const gltf = await new GLTFLoader().loadAsync(URL.createObjectURL(file));
+        mesh = gltf.scene;
+      } else if (ext === 'obj') {
+        mesh = new OBJLoader().parse(await file.text());
+      } else if (ext === 'stl') {
+        mesh = new STLLoader().parse(await file.arrayBuffer());
+      } else if (ext === 'fbx') {
+        mesh = new FBXLoader().parse(await file.arrayBuffer());
+      } else {
+        showNotification('Unsupported model type: .' + ext, true);
+        return;
+      }
+    } catch (err) {
+      showNotification('Failed to load model: ' + err.message, true);
+      return;
+    }
+    aircraftManager.loadMesh(mesh);
+    showNotification('Model loaded: ' + file.name);
+    modelFile.value = '';
+  });
+
+  // --- FDM parameter overrides ---
+  document.getElementById('applyFdmParams').addEventListener('click', () => {
+    const raw = document.getElementById('fdmParams').value.trim();
+    if (!raw) return;
+    let cfg;
+    try {
+      cfg = JSON.parse(raw);
+    } catch (err) {
+      showNotification('Invalid FDM JSON: ' + err.message, true);
+      return;
+    }
+    try {
+      rfdm.setConfig(cfg);
+      if (typeof flightController.resetOrigin === 'function') flightController.resetOrigin();
+      flightController.position.set(0, REALWORLD_START_ALTITUDE, 0);
+      showNotification('FDM config applied');
+    } catch (err) {
+      showNotification('FDM config failed: ' + err.message, true);
+    }
   });
 
   // --- Systems ---

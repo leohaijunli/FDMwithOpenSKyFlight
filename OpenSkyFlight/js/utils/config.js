@@ -87,6 +87,51 @@ const CONFIG = {
   fogEnabled: true,
   fogDensity: 0.000015,
   hiResMode: true,
+
+  /** Rust FDM plant overrides (see `rfdm_set_config`). Keys omitted keep defaults. */
+  fdm: {
+    mass: 1.4,
+    inertia: [0.019, 0.019, 0.0252],
+    motor: { kv: 960, resistance: 0.117, i0: 0.45, vmax: 14.63 },
+    prop: { diam: 0.23876, ixx: 6.05e-5, senseMult: -1.0 },
+    rotors: [
+      { x: 0.1651, y: 0.1651, z: -0.025, sense: 1 },
+      { x: -0.1651, y: -0.1651, z: -0.025, sense: 1 },
+      { x: 0.1651, y: -0.1651, z: -0.025, sense: -1 },
+      { x: -0.1651, y: 0.1651, z: -0.025, sense: -1 },
+    ],
+    aero: { s: 0.016129, cd: 1.0 },
+    ground: {
+      k: 3000,
+      c: 100,
+      muS: 0.8,
+      muD: 0.5,
+      contacts: [
+        [0.1651, 0.1651, 0.1524],
+        [-0.1651, 0.1651, 0.1524],
+        [0.1651, -0.1651, 0.1524],
+        [-0.1651, -0.1651, 0.1524],
+      ],
+    },
+    initial: { alt: 5, psi: 0 },
+    stabilizer: { maxRatePq: 4.0, maxRateR: 2.0, kp: 0.09, ki: 0.05, limit: 0.3 },
+  },
+
+  /** Browser-side control-loop overrides (see MultirotorController). */
+  control: {
+    physHz: 250,
+    maxSubsteps: 25,
+    hoverThrottle: 0.405,
+    vzKp: 0.06,
+    vzKi: 0.02,
+    thrIntMax: 0.25,
+    maxRatePq: 4.0,
+    attKp: 2.5,
+    velKp: 0.05,
+    velKi: 0.08,
+    velIntMax: 1.5,
+    maxTilt: 0.5,
+  },
 };
 
 const listeners = new Set();
