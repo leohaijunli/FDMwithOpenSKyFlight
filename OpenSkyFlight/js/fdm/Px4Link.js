@@ -60,13 +60,6 @@ export default class Px4Link {
     this._parser = new Mav.MavParser();
     this._origin = null;
     this._lastHb = -1.0;
-    this.rc = new Array(12).fill(1500);
-    this.rssi = 254;
-  }
-
-  /** Feed RC stick PWMs (µs) to PX4; PX4 default mapping: 1=roll, 2=pitch, 3=throttle, 4=yaw. */
-  setRcChannels(chan) {
-    for (let i = 0; i < 12; i++) this.rc[i] = Math.max(800, Math.min(2200, chan[i] ?? 1500));
   }
 
   setOrigin(latDeg, lonDeg, altM) {
@@ -193,7 +186,6 @@ export default class Px4Link {
 
     this._send(Mav.encodeHilSensor(sensor, this._nextSeq()));
     this._send(Mav.encodeHilGps(gps, this._nextSeq()));
-    this._send(Mav.encodeHilRcInputsRaw({ time_usec: timeUsec, chan: this.rc, rssi: this.rssi }, this._nextSeq()));
     this._send(Mav.encodeHilStateQuaternion(state, this._nextSeq()));
     this.framesSent++;
   }

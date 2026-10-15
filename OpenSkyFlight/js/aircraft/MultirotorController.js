@@ -157,16 +157,6 @@ export default class MultirotorController {
     return { throttle: this._throttle, roll: rollStick, pitch: pitchStick, yaw: cmd.yaw };
   }
 
-  /** Map flight sticks to PX4 RC PWMs (µs): 1=roll, 2=pitch, 3=throttle, 4=yaw. */
-  _rcPwm(cmd) {
-    const c = new Array(12).fill(1500);
-    c[0] = 1500 + Math.round(cmd.roll * 500);
-    c[1] = 1500 + Math.round(cmd.pitch * 500);
-    c[2] = 1000 + Math.round(this._throttle * 1000);
-    c[3] = 1500 + Math.round(cmd.yaw * 500);
-    return c;
-  }
-
   update(dt) {
     if (!this.enabled) return;
 
@@ -175,7 +165,6 @@ export default class MultirotorController {
     while (this._accum >= DT && steps < MAX_SUBSTEPS) {
       const st = this.rfdm.readState();
       if (this.sitl && this.px4.px4Connected) {
-        this.px4.setRcChannels(this._rcPwm(this.input.getSticks()));
         this.px4.sendSensors(st);
         this.rfdm.stepMotors(DT, this.px4.motors);
       } else {

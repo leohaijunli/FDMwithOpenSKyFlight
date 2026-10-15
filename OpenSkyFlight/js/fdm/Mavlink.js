@@ -9,7 +9,6 @@ const STX1 = 0xfe;
 
 export const MSG = {
   HEARTBEAT: 0,
-  HIL_RC_INPUTS_RAW: 92,
   HIL_ACTUATOR_CONTROLS: 93,
   HIL_SENSOR: 107,
   HIL_GPS: 113,
@@ -18,7 +17,6 @@ export const MSG = {
 
 const CRC_EXTRA = {
   0: 50,
-  92: 54,
   93: 47,
   107: 108,
   113: 124,
@@ -140,15 +138,6 @@ export function encodeHilGps(g, seq, sysid = 1, compid = 1) {
     dv.setUint16(37, u16(g.yaw_deg * 100), true);
   });
   return packV2(MSG.HIL_GPS, p, seq, sysid, compid);
-}
-
-export function encodeHilRcInputsRaw(rc, seq, sysid = 1, compid = 1) {
-  const p = payload(33, (dv) => {
-    dv.setBigUint64(0, usec(rc.time_usec), true);
-    for (let i = 0; i < 12; i++) dv.setUint16(8 + 2 * i, rc.chan[i] & 0xffff, true);
-    dv.setUint8(32, rc.rssi);
-  });
-  return packV2(MSG.HIL_RC_INPUTS_RAW, p, seq, sysid, compid);
 }
 
 export function encodeHilStateQuaternion(s, seq, sysid = 1, compid = 1) {
