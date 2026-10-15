@@ -7,12 +7,14 @@ const MAVLINK_STX: u8 = 0xFD;
 const MAVLINK_STX1: u8 = 0xFE;
 
 pub const MSG_HEARTBEAT: u32 = 0;
+pub const MSG_HIL_RC_INPUTS_RAW: u32 = 92;
 pub const MSG_HIL_ACTUATOR_CONTROLS: u32 = 93;
 pub const MSG_HIL_SENSOR: u32 = 107;
 pub const MSG_HIL_GPS: u32 = 113;
 pub const MSG_HIL_STATE_QUATERNION: u32 = 115;
 
 const CRC_HEARTBEAT: u8 = 50;
+const CRC_HIL_RC_INPUTS_RAW: u8 = 54;
 #[allow(dead_code)]
 const CRC_HIL_ACTUATOR_CONTROLS: u8 = 47;
 const CRC_HIL_SENSOR: u8 = 108;
@@ -105,6 +107,23 @@ pub fn encode_heartbeat(
     push_u8(&mut p, system_status);
     push_u8(&mut p, 3);
     pack_v2(MSG_HEARTBEAT, &p, CRC_HEARTBEAT, seq, sysid, compid)
+}
+
+pub fn encode_hil_rc_inputs_raw(
+    time_usec: u64,
+    chan: &[u16; 12],
+    rssi: u8,
+    seq: u8,
+    sysid: u8,
+    compid: u8,
+) -> Vec<u8> {
+    let mut p = Vec::with_capacity(33);
+    push_u64(&mut p, time_usec);
+    for &c in chan {
+        push_u16(&mut p, c);
+    }
+    push_u8(&mut p, rssi);
+    pack_v2(MSG_HIL_RC_INPUTS_RAW, &p, CRC_HIL_RC_INPUTS_RAW, seq, sysid, compid)
 }
 
 pub fn encode_hil_sensor(f: &SensorFrame, seq: u8, sysid: u8, compid: u8) -> Vec<u8> {
@@ -348,6 +367,8 @@ pub struct SitlLink<T: Transport> {
     motors: [f64; 4],
     pending: bool,
     pub send_state_quaternion: bool,
+    pub rc: [u16; 12],
+    pub rssi: u8,
 }
 
 impl<T: Transport> SitlLink<T> {
@@ -361,6 +382,8 @@ impl<T: Transport> SitlLink<T> {
             motors: [0.0; 4],
             pending: false,
             send_state_quaternion: true,
+            rc: [1500; 12],
+            rssi: 254,
         }
     }
 
@@ -383,7 +406,7 @@ impl<T: Transport> SitlLink<T> {
         self.transport.send(&msg)
     }
 
-    /// Emit HIL_SENSOR (+ HIL_GPS, + HIL_STATE_QUATERNION) for one simulation step.
+    /// Emit HIL_SENSOR (+ HIL_GPS, + HIL_RC_INPUTS_RAW, + HIL_STATE_QUATERNION) for one simulation step.
     pub fn send_sensors(
         &mut self,
         frame: &SensorFrame,
@@ -396,6 +419,9 @@ impl<T: Transport> SitlLink<T> {
         let (s, sysid, compid) = (self.next_seq(), self.sysid, self.compid);
         let gps = encode_hil_gps(frame, s, sysid, compid);
         self.transport.send(&gps)?;
+        let (s, sysid, compid) = (self.next_seq(), self.sysid, self.compid);
+        let rc = encode_hil_rc_inputs_raw(frame.time_usec, &self.rc, self.rssi, s, sysid, compid);
+        self.transport.send(&rc)?;
         if self.send_state_quaternion {
             let (s, sysid, compid) = (self.next_seq(), self.sysid, self.compid);
             let st = encode_hil_state_quaternion(state, origin, s, sysid, compid);
@@ -515,6 +541,7 @@ mod tests {
         assert_eq!(p.next_message().unwrap().0, MSG_HEARTBEAT);
         assert_eq!(p.next_message().unwrap().0, MSG_HIL_SENSOR);
         assert_eq!(p.next_message().unwrap().0, MSG_HIL_GPS);
+        assert_eq!(p.next_message().unwrap().0, MSG_HIL_RC_INPUTS_RAW);
         assert_eq!(p.next_message().unwrap().0, MSG_HIL_STATE_QUATERNION);
 
         // And the decoded motors drive the plant forward without panicking.
@@ -551,6 +578,7 @@ mod tests {
         let f = frame();
         assert_eq!(encode_hil_sensor(&f, 0, 1, 1).len(), 12 + 65);
         assert_eq!(encode_hil_gps(&f, 0, 1, 1).len(), 12 + 39);
+        assert_eq!(encode_hil_rc_inputs_raw(0, &[1500; 12], 254, 0, 1, 1).len(), 12 + 33);
         let st = FdmState {
             time: 1.0,
             pos_ned: [0.0; 3],
