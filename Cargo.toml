@@ -1,0 +1,16 @@
+[package]
+name = "rfdm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rfdm"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "rfdm"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
