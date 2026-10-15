@@ -81,13 +81,13 @@ function recharge(x) {
   return i16((x * 1000.0) / 9.80665);
 }
 
-export function encodeHeartbeat(seq, sysid = 1, compid = 1) {
+export function encodeHeartbeat(seq, sysid = 1, compid = 1, mavType = 2, autopilot = 8, systemStatus = 4) {
   const p = payload(9, (dv) => {
-    dv.setUint32(0, 0, true);
-    dv.setUint8(4, 0);
-    dv.setUint8(5, 0);
-    dv.setUint8(6, 0);
-    dv.setUint8(7, 0);
+    dv.setUint8(0, mavType);
+    dv.setUint8(1, autopilot);
+    dv.setUint8(2, 0);
+    dv.setUint32(3, 0, true);
+    dv.setUint8(7, systemStatus);
     dv.setUint8(8, 3);
   });
   return packV2(MSG.HEARTBEAT, p, seq, sysid, compid);
@@ -122,17 +122,17 @@ export function encodeHilGps(g, seq, sysid = 1, compid = 1) {
   const speed = Math.hypot(vn, ve);
   const p = payload(39, (dv) => {
     dv.setBigUint64(0, usec(g.time_usec), true);
-    dv.setInt32(8, i32(g.lat_deg * 1e7), true);
-    dv.setInt32(12, i32(g.lon_deg * 1e7), true);
-    dv.setInt32(16, i32(g.alt_m * 1000), true);
-    dv.setUint16(20, u16(g.eph_m * 100), true);
-    dv.setUint16(22, u16(g.epv_m * 100), true);
-    dv.setUint16(24, u16(speed * 100), true);
-    dv.setInt16(26, i16(vn * 100), true);
-    dv.setInt16(28, i16(ve * 100), true);
-    dv.setInt16(30, i16(vd * 100), true);
-    dv.setUint16(32, u16(g.cog_deg * 100), true);
-    dv.setUint8(34, g.fix_type);
+    dv.setUint8(8, g.fix_type);
+    dv.setInt32(9, i32(g.lat_deg * 1e7), true);
+    dv.setInt32(13, i32(g.lon_deg * 1e7), true);
+    dv.setInt32(17, i32(g.alt_m * 1000), true);
+    dv.setUint16(21, u16(g.eph_m * 100), true);
+    dv.setUint16(23, u16(g.epv_m * 100), true);
+    dv.setUint16(25, u16(speed * 100), true);
+    dv.setInt16(27, i16(vn * 100), true);
+    dv.setInt16(29, i16(ve * 100), true);
+    dv.setInt16(31, i16(vd * 100), true);
+    dv.setUint16(33, u16(g.cog_deg * 100), true);
     dv.setUint8(35, g.satellites);
     dv.setUint8(36, 0);
     dv.setUint16(37, u16(g.yaw_deg * 100), true);
@@ -169,12 +169,12 @@ export function decodeHilActuatorControls(p) {
   if (p.length < 81) return null;
   const dv = new DataView(p.buffer, p.byteOffset, p.byteLength);
   const controls = new Array(16);
-  for (let i = 0; i < 16; i++) controls[i] = dv.getFloat32(16 + 4 * i, true);
+  for (let i = 0; i < 16; i++) controls[i] = dv.getFloat32(8 + 4 * i, true);
   return {
     time_usec: dv.getBigUint64(0, true),
-    flags: dv.getBigUint64(8, true),
+    flags: dv.getBigUint64(73, true),
     controls,
-    mode: dv.getUint8(80),
+    mode: dv.getUint8(72),
   };
 }
 

@@ -59,6 +59,7 @@ export default class Px4Link {
     this._seq = 0;
     this._parser = new Mav.MavParser();
     this._origin = null;
+    this._lastHb = -1.0;
   }
 
   setOrigin(latDeg, lonDeg, altM) {
@@ -130,6 +131,10 @@ export default class Px4Link {
     if (!this.active || !this.px4Connected) return;
 
     const timeUsec = st[IDX.time] * 1e6;
+    if (st[IDX.time] - this._lastHb >= 1.0) {
+      this._send(Mav.encodeHeartbeat(this._nextSeq()));
+      this._lastHb = st[IDX.time];
+    }
     const quat = [st[IDX.qw], st[IDX.qx], st[IDX.qy], st[IDX.qz]];
     const accel = [st[IDX.ax], st[IDX.ay], st[IDX.az]];
     const omega = [st[IDX.p], st[IDX.q], st[IDX.r]];

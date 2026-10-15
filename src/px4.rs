@@ -98,10 +98,10 @@ pub fn encode_heartbeat(
     system_status: u8,
 ) -> Vec<u8> {
     let mut p = Vec::with_capacity(9);
-    push_u32(&mut p, 0);
     push_u8(&mut p, mav_type);
     push_u8(&mut p, autopilot);
     push_u8(&mut p, 0);
+    push_u32(&mut p, 0);
     push_u8(&mut p, system_status);
     push_u8(&mut p, 3);
     pack_v2(MSG_HEARTBEAT, &p, CRC_HEARTBEAT, seq, sysid, compid)
@@ -136,6 +136,7 @@ pub fn encode_hil_gps(f: &SensorFrame, seq: u8, sysid: u8, compid: u8) -> Vec<u8
     let speed = (vn * vn + ve * ve).sqrt();
     let mut p = Vec::with_capacity(39);
     push_u64(&mut p, f.time_usec);
+    push_u8(&mut p, g.fix_type);
     push_i32(&mut p, (g.lat_deg * 1e7) as i32);
     push_i32(&mut p, (g.lon_deg * 1e7) as i32);
     push_i32(&mut p, (g.alt_m * 1000.0) as i32);
@@ -146,7 +147,6 @@ pub fn encode_hil_gps(f: &SensorFrame, seq: u8, sysid: u8, compid: u8) -> Vec<u8
     push_i16(&mut p, i16sat(ve * 100.0));
     push_i16(&mut p, i16sat(vd * 100.0));
     push_u16(&mut p, u16sat(g.cog_deg * 100.0));
-    push_u8(&mut p, g.fix_type);
     push_u8(&mut p, g.satellites);
     push_u8(&mut p, 0);
     push_u16(&mut p, u16sat(g.yaw_deg * 100.0));
@@ -195,13 +195,13 @@ pub fn decode_hil_actuator_controls(payload: &[u8]) -> Option<ActuatorControls> 
         return None;
     }
     let time_usec = u64::from_le_bytes(payload[0..8].try_into().ok()?);
-    let flags = u64::from_le_bytes(payload[8..16].try_into().ok()?);
+    let flags = u64::from_le_bytes(payload[73..81].try_into().ok()?);
     let mut controls = [0.0f64; 16];
     for i in 0..16 {
-        let o = 16 + 4 * i;
+        let o = 8 + 4 * i;
         controls[i] = f32::from_le_bytes(payload[o..o + 4].try_into().ok()?) as f64;
     }
-    let mode = payload[80];
+    let mode = payload[72];
     Some(ActuatorControls { time_usec, controls, mode, flags })
 }
 
@@ -478,7 +478,7 @@ mod tests {
     fn actuator_frame(controls: [f32; 4]) -> Vec<u8> {
         let mut p = vec![0u8; 81];
         for i in 0..4 {
-            p[16 + 4 * i..20 + 4 * i].copy_from_slice(&controls[i].to_le_bytes());
+            p[8 + 4 * i..12 + 4 * i].copy_from_slice(&controls[i].to_le_bytes());
         }
         pack_v2(MSG_HIL_ACTUATOR_CONTROLS, &p, CRC_HIL_ACTUATOR_CONTROLS, 0, 1, 1)
     }
@@ -572,9 +572,9 @@ mod tests {
         payload[0..8].copy_from_slice(&123u64.to_le_bytes());
         for i in 0..16 {
             let v = 0.1 * i as f32;
-            payload[16 + 4 * i..20 + 4 * i].copy_from_slice(&v.to_le_bytes());
+            payload[8 + 4 * i..12 + 4 * i].copy_from_slice(&v.to_le_bytes());
         }
-        payload[80] = 5;
+        payload[72] = 5;
         let c = decode_hil_actuator_controls(&payload).unwrap();
         assert_eq!(c.time_usec, 123);
         assert_eq!(c.mode, 5);
