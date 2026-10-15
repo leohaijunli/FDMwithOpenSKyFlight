@@ -75,6 +75,17 @@ pub extern "C" fn rfdm_step(
     sim.step(dt, &pilot);
 }
 
+/// Advance one physics step driving the 4 motors directly, bypassing the
+/// built-in stabilizer. Commands are in [0, 1], order [FR, AL, FL, AR].
+#[no_mangle]
+pub extern "C" fn rfdm_step_motors(ptr: *mut Sim, dt: f64, m0: f64, m1: f64, m2: f64, m3: f64) {
+    if ptr.is_null() {
+        return;
+    }
+    let sim = unsafe { &mut *ptr };
+    sim.step_motors(dt, &[m0, m1, m2, m3]);
+}
+
 /// Write the current plant state into `out` (must hold [`STATE_LEN`] `f64`s).
 ///
 /// Layout:

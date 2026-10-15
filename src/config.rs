@@ -39,9 +39,10 @@ pub fn f450() -> Aircraft {
     };
     let ground = Ground {
         contacts: vec![
-            contact(0.1016, 0.0),
-            contact(-0.1016, -0.1016),
-            contact(-0.1016, 0.1016),
+            contact(0.1651, 0.1651),
+            contact(-0.1651, 0.1651),
+            contact(0.1651, -0.1651),
+            contact(-0.1651, -0.1651),
         ],
     };
 

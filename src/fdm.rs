@@ -143,3 +143,29 @@ fn add4(q: Quat, qd: Quat, dt: f64) -> Quat {
         q[3] + qd[3] * dt,
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::f450;
+
+    #[test]
+    fn lands_upright_and_takes_off() {
+        let state = State {
+            p_ned: [0.0, 0.0, -5.0],
+            v_ned: [0.0; 3],
+            w_b: [0.0; 3],
+            q: [1.0, 0.0, 0.0, 0.0],
+        };
+        let mut fdm = Fdm::new(f450(), state);
+        for _ in 0..1250 {
+            fdm.step(0.004, &[0.0; 4]);
+        }
+        assert!(fdm.state().q[0].abs() > 0.99, "flipped on landing: {:?}", fdm.state().q);
+        assert!(fdm.alt() > 0.0 && fdm.alt() < 0.3, "resting alt {}", fdm.alt());
+        for _ in 0..750 {
+            fdm.step(0.004, &[0.5; 4]);
+        }
+        assert!(fdm.alt() > 5.0, "failed to take off: alt {}", fdm.alt());
+    }
+}

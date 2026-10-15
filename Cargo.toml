@@ -2,6 +2,7 @@
 name = "rfdm"
 version = "0.1.0"
 edition = "2021"
+default-run = "rfdm_sim"
 
 [lib]
 name = "rfdm"
@@ -9,7 +10,7 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "rfdm"
+name = "rfdm_sim"
 path = "src/main.rs"
 
 [profile.release]
