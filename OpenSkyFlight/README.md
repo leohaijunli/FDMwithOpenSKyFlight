@@ -95,6 +95,18 @@ Available scripts:
 
 Use the right-side control panel to search locations, load terrain, and select texture mode.
 
+### PX4 SITL synchronization
+
+The browser FDM is the visible plant for browser-linked SITL. Start the PX4 relay before launching PX4:
+
+```bash
+node scripts/px4_bridge.js --tcp-port 4560 --ws-port 3001
+```
+
+Configure PX4 `none_iris` to use the TCP Simulator MAVLink link on port `4560`, and open OpenSkyFlight at `http://localhost:3000`. The **PX4 SITL LINK** option is enabled by default; the status badge reports when the bridge, PX4, and actuator outputs are live. While SITL is enabled, the browser does not fall back to local keyboard dynamics. The model waits for fresh armed actuator output, and stops applying stale outputs if the stream drops. When switching PX4 back to another simulator, stop this relay and start the desired simulator on port `4560`.
+
+The native Rust `px4_sitl` binary is an alternative standalone FDM endpoint; do not run it at the same time as the browser relay because both require TCP port `4560` and they simulate separate plants.
+
 ## Building three-tile (dev only)
 
 The terrain engine relies on [three-tile](https://github.com/sxguojf/three-tile), a lightweight Three.js tile map library. We vendor a patched fork (`0.11.8-osf`) in `vendor/three-tile/` with custom LOD enhancements (concentric view-center weighting, removal hysteresis).

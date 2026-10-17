@@ -23,6 +23,7 @@
 <body>
   <div id="canvas-container"></div>
   <canvas id="hud"></canvas>
+  <div id="sitl-status" role="status" aria-live="polite">PX4 SITL: STARTING</div>
 <div id="crosshair"></div>
   <div id="hires-badge" style="display:none;">HI-RES Z17</div>
   <div id="stick-pad" style="display:none;"><div id="stick-knob"></div></div>
@@ -35,7 +36,7 @@
     N : record waypoints | Shift+N : clear plan | P : add waypoint<br>
     L : load flight plan | G : autopilot on/off<br>
     B : benchmark | Shift+B : store baseline<br>
-    PX4 SITL : panel toggle (run scripts/px4_bridge.js, then PX4)
+    PX4 SITL : auto-linked through scripts/px4_bridge.js | status shown above
   </div>
 
   <div id="flightplan-menu" style="display:none;">

@@ -27,11 +27,7 @@ function rotate(q, v) {
   const tx = 2 * (y * v[2] - z * v[1]);
   const ty = 2 * (z * v[0] - x * v[2]);
   const tz = 2 * (x * v[1] - y * v[0]);
-  return [
-    v[0] + w * tx + (y * tz - z * ty),
-    v[1] + w * ty + (z * tx - x * tz),
-    v[2] + w * tz + (x * ty - y * tx),
-  ];
+  return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)];
 }
 
 function conj(q) {
@@ -52,7 +48,13 @@ function toGeodetic(origin, n, e, d) {
 export default class Px4Link {
   constructor() {
     this.ws = null;
+    this.onStatus = null;
+    this._url = null;
+    this._reconnectTimer = null;
+    this._shouldReconnect = false;
     this.motors = [0, 0, 0, 0];
+    this.armed = false;
+    this.lastActuatorAt = 0;
     this.px4Connected = false;
     this.framesSent = 0;
     this.actuatorsReceived = 0;
@@ -68,41 +70,80 @@ export default class Px4Link {
 
   connect(url) {
     this.disconnect();
-    if (typeof WebSocket === 'undefined') return;
+    this._url = url;
+    this._shouldReconnect = true;
+    this._open();
+  }
+
+  _open() {
+    if (!this._shouldReconnect || typeof WebSocket === 'undefined') return;
+    let ws;
     try {
-      this.ws = new WebSocket(url);
+      ws = new WebSocket(this._url);
     } catch {
-      this.ws = null;
+      this._scheduleReconnect();
       return;
     }
-    this.ws.binaryType = 'arraybuffer';
-    this.ws.onmessage = (ev) => this._onMessage(ev.data);
-    this.ws.onclose = () => {
-      this.px4Connected = false;
+    this.ws = ws;
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = () => this._notifyStatus();
+    ws.onmessage = (ev) => this._onMessage(ev.data);
+    ws.onclose = () => {
+      if (this.ws !== ws) return;
       this.ws = null;
+      this.px4Connected = false;
+      this.motors = [0, 0, 0, 0];
+      this.armed = false;
+      this._notifyStatus();
+      this._scheduleReconnect();
     };
-    this.ws.onerror = () => {};
+    ws.onerror = () => {};
+  }
+
+  _scheduleReconnect() {
+    if (!this._shouldReconnect || this._reconnectTimer !== null) return;
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = null;
+      this._open();
+    }, 1000);
   }
 
   disconnect() {
-    if (this.ws) {
+    this._shouldReconnect = false;
+    if (this._reconnectTimer !== null) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+    const ws = this.ws;
+    this.ws = null;
+    this.px4Connected = false;
+    this.motors = [0, 0, 0, 0];
+    this.armed = false;
+    if (ws) {
       try {
-        this.ws.close();
+        ws.close();
       } catch {
         /* ignore */
       }
-      this.ws = null;
     }
-    this.px4Connected = false;
   }
 
   get active() {
     return !!this.ws && this.ws.readyState === WebSocket.OPEN;
   }
 
+  _notifyStatus() {
+    if (this.onStatus) this.onStatus();
+  }
+
   _onMessage(data) {
     if (typeof data === 'string') {
-      this.px4Connected = data.includes('1');
+      this.px4Connected = data.trim() === 'PX4:1';
+      if (!this.px4Connected) {
+        this.motors = [0, 0, 0, 0];
+        this.armed = false;
+      }
+      this._notifyStatus();
       return;
     }
     this._parser.push(new Uint8Array(data));
@@ -114,7 +155,10 @@ export default class Px4Link {
           for (let i = 0; i < 4; i++) {
             this.motors[i] = Math.max(0, Math.min(1, c.controls[i]));
           }
+          this.armed = (c.mode & 128) !== 0;
+          this.lastActuatorAt = performance.now();
           this.actuatorsReceived++;
+          this._notifyStatus();
         }
       }
     }
@@ -155,11 +199,8 @@ export default class Px4Link {
       alt_m: altMsl,
       temp_c: atm.t - 273.15,
     };
-    const cog =
-      Math.hypot(vel[0], vel[1]) > 0.5
-        ? ((Math.atan2(vel[1], vel[0]) * RAD2DEG) % 360 + 360) % 360
-        : 0;
-    const yaw = ((st[IDX.yaw] * RAD2DEG) % 360 + 360) % 360;
+    const cog = Math.hypot(vel[0], vel[1]) > 0.5 ? (((Math.atan2(vel[1], vel[0]) * RAD2DEG) % 360) + 360) % 360 : 0;
+    const yaw = (((st[IDX.yaw] * RAD2DEG) % 360) + 360) % 360;
     const gps = {
       time_usec: timeUsec,
       lat_deg: lat * RAD2DEG,

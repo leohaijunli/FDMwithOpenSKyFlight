@@ -180,7 +180,14 @@ pub fn encode_hil_state_quaternion(
     push_i16(&mut p, recharge(s.accel_body[0]));
     push_i16(&mut p, recharge(s.accel_body[1]));
     push_i16(&mut p, recharge(s.accel_body[2]));
-    pack_v2(MSG_HIL_STATE_QUATERNION, &p, CRC_HIL_STATE_QUATERNION, seq, sysid, compid)
+    pack_v2(
+        MSG_HIL_STATE_QUATERNION,
+        &p,
+        CRC_HIL_STATE_QUATERNION,
+        seq,
+        sysid,
+        compid,
+    )
 }
 
 pub struct ActuatorControls {
@@ -202,7 +209,12 @@ pub fn decode_hil_actuator_controls(payload: &[u8]) -> Option<ActuatorControls> 
         controls[i] = f32::from_le_bytes(payload[o..o + 4].try_into().ok()?) as f64;
     }
     let mode = payload[72];
-    Some(ActuatorControls { time_usec, controls, mode, flags })
+    Some(ActuatorControls {
+        time_usec,
+        controls,
+        mode,
+        flags,
+    })
 }
 
 /// Incremental MAVLink v1/v2 frame parser.
@@ -251,7 +263,8 @@ impl MavParser {
             if self.buf.len() < total {
                 return None;
             }
-            let msgid = (self.buf[7] as u32) | ((self.buf[8] as u32) << 8) | ((self.buf[9] as u32) << 16);
+            let msgid =
+                (self.buf[7] as u32) | ((self.buf[8] as u32) << 8) | ((self.buf[9] as u32) << 16);
             let payload = self.buf[10..10 + len].to_vec();
             self.buf.drain(0..total);
             return Some((msgid, payload));
@@ -274,7 +287,10 @@ impl TcpServerTransport {
     pub fn bind(addr: &str) -> io::Result<TcpServerTransport> {
         let listener = TcpListener::bind(addr)?;
         listener.set_nonblocking(true)?;
-        Ok(TcpServerTransport { listener, stream: None })
+        Ok(TcpServerTransport {
+            listener,
+            stream: None,
+        })
     }
     pub fn is_connected(&self) -> bool {
         self.stream.is_some()
@@ -297,16 +313,37 @@ impl TcpServerTransport {
 impl Transport for TcpServerTransport {
     fn send(&mut self, data: &[u8]) -> io::Result<()> {
         self.ensure_connected()?;
-        if let Some(s) = self.stream.as_mut() {
-            s.write_all(data)?;
+        let result = match self.stream.as_mut() {
+            Some(stream) => stream.write_all(data),
+            None => return Ok(()),
+        };
+        if let Err(error) = result {
+            // A partial write can leave a truncated MAVLink frame on the wire. Drop
+            // this connection instead of continuing with a corrupted byte stream.
+            self.stream = None;
+            return Err(error);
         }
         Ok(())
     }
     fn recv(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.ensure_connected()?;
-        match self.stream.as_mut() {
-            Some(s) => s.read(buf),
-            None => Err(io::Error::from(io::ErrorKind::WouldBlock)),
+        let result = match self.stream.as_mut() {
+            Some(stream) => stream.read(buf),
+            None => return Err(io::Error::from(io::ErrorKind::WouldBlock)),
+        };
+        match result {
+            Ok(0) => {
+                self.stream = None;
+                Err(io::Error::new(
+                    io::ErrorKind::ConnectionReset,
+                    "PX4 closed the TCP connection",
+                ))
+            }
+            Err(error) if error.kind() != io::ErrorKind::WouldBlock => {
+                self.stream = None;
+                Err(error)
+            }
+            result => result,
         }
     }
 }
@@ -480,7 +517,41 @@ mod tests {
         for i in 0..4 {
             p[8 + 4 * i..12 + 4 * i].copy_from_slice(&controls[i].to_le_bytes());
         }
-        pack_v2(MSG_HIL_ACTUATOR_CONTROLS, &p, CRC_HIL_ACTUATOR_CONTROLS, 0, 1, 1)
+        pack_v2(
+            MSG_HIL_ACTUATOR_CONTROLS,
+            &p,
+            CRC_HIL_ACTUATOR_CONTROLS,
+            0,
+            1,
+            1,
+        )
+    }
+
+    #[test]
+    fn tcp_server_accepts_px4_reconnect_after_eof() {
+        use std::net::TcpStream;
+
+        let mut server = TcpServerTransport::bind("127.0.0.1:0").unwrap();
+        let address = server.listener.local_addr().unwrap();
+        let first_client = TcpStream::connect(address).unwrap();
+        let mut buffer = [0u8; 16];
+
+        assert_eq!(
+            server.recv(&mut buffer).unwrap_err().kind(),
+            io::ErrorKind::WouldBlock
+        );
+        drop(first_client);
+        assert_eq!(
+            server.recv(&mut buffer).unwrap_err().kind(),
+            io::ErrorKind::ConnectionReset
+        );
+        assert!(!server.is_connected());
+
+        let mut second_client = TcpStream::connect(address).unwrap();
+        server.send(b"reconnected").unwrap();
+        second_client.read_exact(&mut buffer[..11]).unwrap();
+        assert_eq!(&buffer[..11], b"reconnected");
+        assert!(server.is_connected());
     }
 
     #[test]
@@ -501,7 +572,10 @@ mod tests {
         let f = suite.sample(0.004, &st);
 
         let reply = actuator_frame([0.5, 0.25, 0.125, 0.75]);
-        let mut link = SitlLink::new(MockPx4 { sent: Vec::new(), inbox: reply });
+        let mut link = SitlLink::new(MockPx4 {
+            sent: Vec::new(),
+            inbox: reply,
+        });
 
         link.send_heartbeat().unwrap();
         link.send_sensors(&f, &st, &origin).unwrap();
@@ -563,7 +637,10 @@ mod tests {
             alt: 0.0,
         };
         let origin = GeoOrigin::new(47.0, 8.0, 488.0);
-        assert_eq!(encode_hil_state_quaternion(&st, &origin, 0, 1, 1).len(), 12 + 64);
+        assert_eq!(
+            encode_hil_state_quaternion(&st, &origin, 0, 1, 1).len(),
+            12 + 64
+        );
     }
 
     #[test]

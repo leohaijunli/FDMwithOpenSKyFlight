@@ -65,6 +65,11 @@ export default class MultirotorController {
     this.input = new StickInput(domElement);
     this.px4 = new Px4Link();
     this.sitl = false;
+    this._lastActuatorCount = 0;
+    this._lastActuatorTime = performance.now();
+    this.px4Status = 'OFF';
+    this.px4Rate = 0;
+    this.px4.onStatus = () => this._updatePx4Status();
     this._throttle = HOVER_THROTTLE;
     this._thrInt = 0;
     this._velIntF = 0;
@@ -86,8 +91,25 @@ export default class MultirotorController {
     if (this.sitl) {
       this.px4.setOrigin(CONFIG.lat, CONFIG.lon, this._originY);
       this.px4.connect(CONFIG.px4Url);
+      this.px4Status = 'CONNECTING';
     } else {
       this.px4.disconnect();
+      this.px4Status = 'OFF';
+      this.px4Rate = 0;
+    }
+    this._updatePx4Status();
+  }
+
+  _updatePx4Status() {
+    if (!this.sitl) {
+      this.px4Status = 'OFF';
+    } else if (this.px4.px4Connected) {
+      this.px4Status =
+        this.px4.actuatorsReceived > 0
+          ? `LIVE ${this.px4Rate} Hz · ${this.px4.armed ? 'ARMED' : 'DISARMED'}`
+          : `WAITING FOR OUTPUT · ${this.px4.framesSent} sensors`;
+    } else {
+      this.px4Status = this.px4.active ? 'WAITING FOR PX4' : 'BRIDGE OFFLINE';
     }
   }
 
@@ -165,9 +187,17 @@ export default class MultirotorController {
     let steps = 0;
     while (this._accum >= DT && steps < MAX_SUBSTEPS) {
       const st = this.rfdm.readState();
-      if (this.sitl && this.px4.px4Connected) {
-        this.px4.sendSensors(st);
-        this.rfdm.stepMotors(DT, this.px4.motors);
+      if (this.sitl) {
+        if (this.px4.px4Connected) {
+          this.px4.sendSensors(st);
+          if (this.px4.armed && performance.now() - this.px4.lastActuatorAt < 500) {
+            this.rfdm.stepMotors(DT, this.px4.motors);
+          } else {
+            // Advance lockstep time and sensors while keeping unarmed/stale outputs at zero.
+            this.px4.motors = [0, 0, 0, 0];
+            this.rfdm.stepMotors(DT, this.px4.motors);
+          }
+        }
       } else {
         const s = this._sticks();
         this.rfdm.step(DT, s.throttle, s.roll, s.pitch, s.yaw);
@@ -178,6 +208,16 @@ export default class MultirotorController {
     if (steps === MAX_SUBSTEPS) this._accum = 0;
 
     const st = this.rfdm.readState();
+    if (this.sitl) {
+      const now = performance.now();
+      const elapsed = now - this._lastActuatorTime;
+      if (elapsed >= 1000) {
+        this.px4Rate = Math.round(((this.px4.actuatorsReceived - this._lastActuatorCount) * 1000) / elapsed);
+        this._lastActuatorCount = this.px4.actuatorsReceived;
+        this._lastActuatorTime = now;
+      }
+      this._updatePx4Status();
+    }
 
     this.position.set(st[IDX.posE], this._originY - st[IDX.posD], -st[IDX.posN]);
 

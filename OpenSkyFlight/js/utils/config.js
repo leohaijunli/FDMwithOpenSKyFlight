@@ -60,7 +60,8 @@ const CONFIG = {
   droneSpeed: 15,
   climbRate: 3.0,
   inputMode: 'keyboard', // 'keyboard' | 'gamepad' | 'joystick' | 'mouse'
-  sitl: false,
+  // Start in PX4 mode so the visible browser aircraft is driven by SITL outputs.
+  sitl: true,
   px4Url: 'ws://localhost:3001',
   cameraMode: 'chase',
   mouseSensitivity: 0.002,

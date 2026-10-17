@@ -122,6 +122,8 @@ class WsConn {
 
 let px4 = null;
 let browser = null;
+let intervalPx4ToBrowser = 0;
+let intervalBrowserToPx4 = 0;
 
 const broadcast = (text) => {
   if (browser) browser.sendText(text);
@@ -137,12 +139,17 @@ const tcp = createTcpServer((sock) => {
   }
   px4 = sock;
   sock.setNoDelay(true);
+  console.log('PX4 TCP connected');
   broadcast('PX4:1');
   sock.on('data', (d) => {
-    if (browser) browser.sendBinary(d);
+    if (browser) {
+      intervalPx4ToBrowser += d.length;
+      browser.sendBinary(d);
+    }
   });
   sock.on('close', () => {
     if (px4 === sock) px4 = null;
+    console.log('PX4 TCP disconnected');
     broadcast('PX4:0');
   });
   sock.on('error', () => {});
@@ -159,7 +166,9 @@ http.on('upgrade', (req, socket) => {
     socket.destroy();
     return;
   }
-  const accept = createHash('sha1').update(key + GUID).digest('base64');
+  const accept = createHash('sha1')
+    .update(key + GUID)
+    .digest('base64');
   socket.write(
     'HTTP/1.1 101 Switching Protocols\r\n' +
       'Upgrade: websocket\r\n' +
@@ -178,7 +187,10 @@ http.on('upgrade', (req, socket) => {
   }
   browser = conn;
   conn.onmessage = (payload) => {
-    if (px4) px4.write(payload);
+    if (px4) {
+      intervalBrowserToPx4 += payload.length;
+      px4.write(payload);
+    }
   };
   conn.onclose = () => {
     if (browser === conn) browser = null;
@@ -187,7 +199,17 @@ http.on('upgrade', (req, socket) => {
   socket.on('close', () => conn.close());
   socket.on('error', () => {});
   conn.sendText(px4 ? 'PX4:1' : 'PX4:0');
+  console.log(`Browser WebSocket connected (PX4 ${px4 ? 'connected' : 'disconnected'})`);
 });
+
+setInterval(() => {
+  console.log(
+    `Relay: PX4=${px4 ? 'connected' : 'disconnected'}, browser=${browser ? 'connected' : 'disconnected'}, ` +
+      `PX4→browser ${intervalPx4ToBrowser} B / browser→PX4 ${intervalBrowserToPx4} B`,
+  );
+  intervalPx4ToBrowser = 0;
+  intervalBrowserToPx4 = 0;
+}, 5000).unref();
 
 tcp.listen(Number(values['tcp-port']), () => {
   console.log(`PX4 bridge: TCP listening on 0.0.0.0:${values['tcp-port']} (PX4 connects here)`);

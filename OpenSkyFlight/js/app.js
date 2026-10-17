@@ -37,6 +37,7 @@ async function initApp() {
   const renderer = await createRenderer();
   const { scene, dirLight, ambientLight } = createScene();
   const camera = createCamera();
+  const sitlStatus = document.getElementById('sitl-status');
 
   // --- Atmosphere ---
   // Side-effect: registers itself with scene, dirLight, and ambientLight
@@ -171,6 +172,9 @@ async function initApp() {
     if (key === 'inputMode') stickPad.style.display = value === 'joystick' ? 'block' : 'none';
     if (key === 'sitl') flightController.setSitl(value);
   });
+
+  // The visible browser FDM is the PX4-driven plant, not a second local simulation.
+  flightController.setSitl(CONFIG.sitl);
 
   // --- Input bindings ---
   const input = new InputManager();
@@ -319,12 +323,15 @@ async function initApp() {
 
     // --- Input phase ---
     flightController.update(dt);
+    if (sitlStatus) {
+      sitlStatus.textContent = CONFIG.sitl ? `PX4 SITL: ${flightController.px4Status}` : 'PX4 SITL: OFF';
+    }
     benchmarkRunner.tickPath(dt, flightController, renderer);
 
     // --- Aircraft state ---
     let aircraftState = null;
 
-    if (flightPlanRecorder.autopilotActive && flightPlanRecorder.getPlan()) {
+    if (!CONFIG.sitl && flightPlanRecorder.autopilotActive && flightPlanRecorder.getPlan()) {
       const plan = flightPlanRecorder.getPlan();
       const ok = plan.update(dt);
       if (!ok) {
@@ -345,7 +352,7 @@ async function initApp() {
           quaternion: _autopilotQuat,
         };
       }
-    } else if (benchmarkRunner.isRunning() && !benchmarkRunner.isWarmup() && benchmarkRunner.cameraPath) {
+    } else if (!CONFIG.sitl && benchmarkRunner.isRunning() && !benchmarkRunner.isWarmup() && benchmarkRunner.cameraPath) {
       const path = benchmarkRunner.cameraPath;
       _autopilotEuler.set(path.pitch, path.yaw, 0, 'YXZ');
       _autopilotQuat.setFromEuler(_autopilotEuler);
@@ -357,7 +364,7 @@ async function initApp() {
         pitchRate: path.pitchRate,
         quaternion: _autopilotQuat,
       };
-    } else if (!benchmarkRunner.isRunning()) {
+    } else if (CONFIG.sitl || !benchmarkRunner.isRunning()) {
       aircraftState = {
         position: flightController.position,
         yaw: flightController.yaw,
